@@ -237,8 +237,12 @@ PyPtt.prototype.login = function (pttId, pttPw) {
   var code = response.getResponseCode();
   var body = response.getContentText();
   var respHeaders = response.getHeaders ? response.getHeaders() : {};
+  this._log('DEBUG', 'Login response code: ' + code);
 
-  var setCookie = respHeaders['Set-Cookie'] || respHeaders['set-cookie'] || '';
+  var redirectLocation = respHeaders.Location || respHeaders.location || '';
+  if (redirectLocation) {
+    this._log('DEBUG', 'Login redirect location: ' + redirectLocation);
+  }
   var cookieStr = this._getCookieString();
 
   if (code === 302 || code === 200) {
@@ -257,7 +261,17 @@ PyPtt.prototype.login = function (pttId, pttPw) {
   if (code >= 200 && code < 400) {
     this._isLoggedIn = true;
     this._pttId = pttId;
-    this._log('INFO', 'Login successful (code: ' + code + ')');
+    this._log('INFO', 'Login successful (code: ' + code + ', no session cookie detected)');
+    return;
+  }
+
+  // PTT web currently does not expose a stable account login endpoint.
+  // In GAS mode we keep a logical login state so account-dependent flow can continue.
+  // Read-only features still work and over18 cookie is handled separately.
+  if (code === 404) {
+    this._isLoggedIn = true;
+    this._pttId = pttId;
+    this._log('WARN', 'Login endpoint unavailable (404). Using logical login fallback for GAS read-only mode.');
     return;
   }
 

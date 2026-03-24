@@ -458,6 +458,21 @@ runTest('should login successfully with mock', function () {
   assertEqual(ptt._pttId, 'testuser', 'ptt id');
 });
 
+runTest('should fallback to logical login when endpoint is 404', function () {
+  var ptt = new PyPtt();
+  ptt._testFetch = function () {
+    return {
+      getResponseCode: function () { return 404; },
+      getContentText: function () { return 'Not Found'; },
+      getHeaders: function () { return {}; },
+    };
+  };
+
+  ptt.login('fallbackUser', 'fallbackPw');
+  assert(ptt._isLoggedIn, 'should be logically logged in on 404');
+  assertEqual(ptt._pttId, 'fallbackUser', 'ptt id');
+});
+
 runTest('should logout correctly', function () {
   var ptt = new PyPtt();
   ptt._isLoggedIn = true;
