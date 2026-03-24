@@ -2,8 +2,13 @@
  * PyPttGAS Tests - Google Apps Script Test Functions
  *
  * Before running these tests, set the following Script Properties:
- *   PTT_ACCOUNT  - Your PTT account ID
- *   PTT_PASSWORD - Your PTT account password
+ *   PTT_ACCOUNT  - Your PTT account ID (for identity tracking only)
+ *   PTT_PASSWORD - Your PTT account password (kept for API compatibility, NOT sent to PTT)
+ *
+ * NOTE: PTT web (www.ptt.cc) is a read-only HTML frontend.
+ * Real login requires WebSocket via the Python PyPtt library.
+ * This GAS library uses login() only to record user identity and
+ * confirm over-18 access for age-restricted boards.
  *
  * To set Script Properties:
  *   1. In the Apps Script editor, click ⚙️ (Project Settings)
@@ -18,21 +23,26 @@
 // ============================================================
 
 /**
- * Test login with credentials from Script Properties.
+ * Test login/logout flow.
+ * Note: login() does NOT perform real account auth (PTT web is read-only).
+ * It records user identity and confirms over-18 access via cookie.
  */
 function testLogin() {
   var creds = getPttCredentials();
   var ptt = new PyPtt({ logLevel: 'DEBUG' });
 
   ptt.login(creds.account, creds.password);
-  Logger.log('Login result: ' + ptt.isLoggedIn());
-  Logger.log('Login mode: ' + ptt.getLoginMode());
-  Logger.log('Real session login: ' + ptt.isRealSessionLogin());
-  Logger.log('Logged in as: ' + ptt.getPttId());
+  Logger.log('Client ready: ' + ptt.isLoggedIn());
+  Logger.log('User: ' + ptt.getPttId());
 
   if (!ptt.isLoggedIn()) {
-    throw new Error('Login failed!');
+    throw new Error('Login (client setup) failed!');
   }
+
+  // Verify over-18 cookie was set
+  var cookies = ptt._getCookieString();
+  Logger.log('Cookies after login: ' + cookies);
+  Logger.log('Over-18 confirmed: ' + ptt._over18Confirmed);
 
   ptt.logout();
   Logger.log('Logout successful');
@@ -107,6 +117,7 @@ function testGetPostListPublic() {
 
 /**
  * Test getting post list from Gossiping board (requires over-18 confirmation).
+ * login() handles over-18 automatically; no real account auth is needed.
  */
 function testGetPostListOver18() {
   var creds = getPttCredentials();

@@ -441,40 +441,42 @@ runTest('should throw on empty credentials', function () {
   assert(threw, 'should have thrown');
 });
 
-runTest('should login successfully with mock', function () {
+runTest('should login successfully with mock (sets identity and confirms over-18)', function () {
   var ptt = new PyPtt();
+  var fetchCalled = false;
   ptt._testFetch = function (url, options) {
+    fetchCalled = true;
+    // Simulate over-18 confirmation response
     return {
-      getResponseCode: function () { return 302; },
+      getResponseCode: function () { return 200; },
       getContentText: function () { return ''; },
       getHeaders: function () {
-        return { 'Set-Cookie': 'PHPSESSID=test123; path=/' };
+        return { 'Set-Cookie': 'over18=1; path=/' };
       },
     };
   };
 
   ptt.login('testuser', 'testpass');
   assert(ptt._isLoggedIn, 'should be logged in');
-  assertEqual(ptt.getLoginMode(), 'REAL', 'login mode');
-  assert(ptt.isRealSessionLogin(), 'should be real session login');
+  assert(fetchCalled, 'should have called fetch for over-18 confirmation');
+  assert(ptt._over18Confirmed, 'over-18 should be confirmed');
   assertEqual(ptt._pttId, 'testuser', 'ptt id');
 });
 
-runTest('should fallback to logical login when endpoint is 404', function () {
+runTest('should login even when over-18 endpoint fails gracefully', function () {
   var ptt = new PyPtt();
   ptt._testFetch = function () {
     return {
-      getResponseCode: function () { return 404; },
-      getContentText: function () { return 'Not Found'; },
+      getResponseCode: function () { return 200; },
+      getContentText: function () { return ''; },
       getHeaders: function () { return {}; },
     };
   };
 
-  ptt.login('fallbackUser', 'fallbackPw');
-  assert(ptt._isLoggedIn, 'should be logically logged in on 404');
-  assertEqual(ptt.getLoginMode(), 'FALLBACK', 'login mode');
-  assert(!ptt.isRealSessionLogin(), 'should not be real session login');
-  assertEqual(ptt._pttId, 'fallbackUser', 'ptt id');
+  ptt.login('testuser2', 'testpass2');
+  assert(ptt._isLoggedIn, 'should be logged in');
+  assert(ptt._over18Confirmed, 'over-18 should be confirmed');
+  assertEqual(ptt._pttId, 'testuser2', 'ptt id');
 });
 
 runTest('should logout correctly', function () {
@@ -486,7 +488,6 @@ runTest('should logout correctly', function () {
   ptt.logout();
 
   assert(!ptt._isLoggedIn, 'not logged in');
-  assertEqual(ptt.getLoginMode(), 'NONE', 'login mode');
   assertEqual(ptt._pttId, '', 'empty ptt id');
   assertEqual(Object.keys(ptt._cookies).length, 0, 'no cookies');
 });

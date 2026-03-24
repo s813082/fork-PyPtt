@@ -1,18 +1,21 @@
 /**
- * PyPttGAS - PTT Web Client for Google Apps Script
+ * PyPttGAS - PTT Web Scraper for Google Apps Script
  *
- * A JavaScript port of PyPtt (https://github.com/PttCodingMan/PyPtt)
- * designed for Google Apps Script. Uses PTT's web interface (www.ptt.cc)
- * via HTTP requests instead of WebSocket/Telnet.
+ * A read-only JavaScript client for PTT (www.ptt.cc) designed for
+ * Google Apps Script. Scrapes PTT's public web pages via HTTP.
+ *
+ * NOTE: The original Python PyPtt uses WebSocket (wss://ws.ptt.cc/bbs/)
+ * to connect to the PTT BBS terminal and perform full login with
+ * VT100 terminal emulation. Google Apps Script only supports HTTP
+ * (UrlFetchApp), so this library can only access PTT's read-only
+ * web interface (www.ptt.cc). Account login is NOT possible via HTTP.
  *
  * Usage in Google Apps Script:
  *   const ptt = new PyPtt();
- *   ptt.login('myId', 'myPw');
  *   const posts = ptt.getPostList('Gossiping');
  *   const post = ptt.getPost('Gossiping', 'M.1234567890.A.ABC');
- *   ptt.logout();
  *
- * @version 1.0.0
+ * @version 1.1.0
  * @license MIT
  */
 
@@ -89,7 +92,6 @@ function PyPtt(options) {
 
   this._cookies = {};
   this._isLoggedIn = false;
-  this._loginMode = 'NONE';
   this._pttId = '';
   this._over18Confirmed = false;
 }
@@ -214,111 +216,61 @@ PyPtt.prototype._log = function (level, message) {
 // ============================================================
 
 /**
- * Login to PTT via the web interface.
+ * Set up the PTT client with user identity and confirm over-18 access.
  *
- * @param {string} pttId - PTT account ID
- * @param {string} pttPw - PTT account password
- * @throws {PttError} LoginError if credentials are incorrect
+ * IMPORTANT: This does NOT perform real account authentication.
+ * The original Python PyPtt connects via WebSocket (wss://ws.ptt.cc/bbs/)
+ * and authenticates through VT100 terminal emulation with the PTT BBS.
+ * Google Apps Script only supports HTTP (UrlFetchApp) and can only access
+ * PTT's read-only web pages (www.ptt.cc), which have no login endpoint.
+ *
+ * What this method does:
+ *   1. Records the user identity for logging/tracking purposes
+ *   2. Sends the over-18 confirmation cookie (POST /ask/over18) so that
+ *      age-restricted boards (e.g., Gossiping, sex) become readable
+ *
+ * All PTT web read operations work without account login.
+ * Write operations (post/push/mail) are NOT possible via HTTP.
+ *
+ * @param {string} pttId - PTT account ID (used for identity tracking only)
+ * @param {string} pttPw - PTT account password (NOT sent anywhere; kept for API compatibility)
  */
 PyPtt.prototype.login = function (pttId, pttPw) {
   if (!pttId || !pttPw) {
     throw PttError(PttException.InvalidArgument, 'pttId and pttPw are required');
   }
 
-  this._log('INFO', 'Logging in as: ' + pttId);
+  this._log('INFO', 'Setting up PTT client for: ' + pttId);
+  this._log('INFO', 'Note: PTT web (www.ptt.cc) is read-only. Account login requires WebSocket (Python PyPtt).');
 
-  var loginUrl = this._baseUrl + '/login';
-  var payload = 'id=' + encodeURIComponent(pttId) + '&pw=' + encodeURIComponent(pttPw);
+  this._pttId = pttId;
+  this._isLoggedIn = true;
 
-  var response = this._fetch(loginUrl, {
-    method: 'post',
-    payload: payload,
-  });
+  // Confirm over-18 so age-restricted boards are accessible
+  this._confirmOver18();
 
-  var code = response.getResponseCode();
-  var body = response.getContentText();
-  var respHeaders = response.getHeaders ? response.getHeaders() : {};
-
-  var redirectLocation = respHeaders.Location || respHeaders.location || '';
-  var cookieStr = this._getCookieString();
-  this._log(
-    'DEBUG',
-    'Login response summary: code=' + code +
-      ', redirect=' + (redirectLocation || '(none)') +
-      ', hasSessionCookie=' + (cookieStr.indexOf('PHPSESSID') >= 0)
-  );
-
-  if (code === 302 || code === 200) {
-    if (cookieStr.indexOf('over18') >= 0 || cookieStr.indexOf('PHPSESSID') >= 0) {
-      this._isLoggedIn = true;
-      this._loginMode = 'REAL';
-      this._pttId = pttId;
-      this._log('INFO', 'Login successful');
-      return;
-    }
-  }
-
-  if (body.indexOf('密碼不對') >= 0 || body.indexOf('error') >= 0) {
-    throw PttError(PttException.LoginError, 'Wrong ID or password');
-  }
-
-  if (code >= 200 && code < 400) {
-    this._isLoggedIn = true;
-    this._loginMode = 'REAL';
-    this._pttId = pttId;
-    this._log('INFO', 'Login successful (code: ' + code + ', no session cookie detected)');
-    return;
-  }
-
-  // PTT web currently does not expose a stable account login endpoint.
-  // In GAS mode we keep a logical login state so read-only account-dependent flow can continue.
-  // Note: write operations (post/comment/mail/edit) still require real BBS session capability.
-  // Read-only features still work and over18 cookie is handled separately.
-  if (code === 404) {
-    this._isLoggedIn = true;
-    this._loginMode = 'FALLBACK';
-    this._pttId = pttId;
-    this._log('WARN', 'Login endpoint unavailable (404). Using logical login fallback for GAS read-only mode.');
-    return;
-  }
-
-  throw PttError(PttException.LoginError, 'Login failed with status code: ' + code);
+  this._log('INFO', 'Client ready. Over-18 confirmed. Read-only access to all boards.');
 };
 
 /**
- * Logout from PTT.
+ * Reset client state (clear cookies and user identity).
  */
 PyPtt.prototype.logout = function () {
   this._cookies = {};
   this._isLoggedIn = false;
-  this._loginMode = 'NONE';
   this._pttId = '';
   this._over18Confirmed = false;
-  this._log('INFO', 'Logged out');
+  this._log('INFO', 'Client reset (logged out)');
 };
 
 /**
- * Check if currently logged in.
+ * Check if the client has been set up via login().
+ * Note: This indicates the client is ready for read operations,
+ * NOT that a real BBS account session exists.
  * @returns {boolean}
  */
 PyPtt.prototype.isLoggedIn = function () {
   return this._isLoggedIn;
-};
-
-/**
- * Get login mode.
- * @returns {string} 'NONE' | 'REAL' | 'FALLBACK'
- */
-PyPtt.prototype.getLoginMode = function () {
-  return this._loginMode;
-};
-
-/**
- * Whether current login state has a real web session.
- * @returns {boolean}
- */
-PyPtt.prototype.isRealSessionLogin = function () {
-  return this._isLoggedIn && this._loginMode === 'REAL';
 };
 
 /**
