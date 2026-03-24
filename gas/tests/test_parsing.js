@@ -455,6 +455,8 @@ runTest('should login successfully with mock', function () {
 
   ptt.login('testuser', 'testpass');
   assert(ptt._isLoggedIn, 'should be logged in');
+  assertEqual(ptt.getLoginMode(), 'REAL', 'login mode');
+  assert(ptt.isRealSessionLogin(), 'should be real session login');
   assertEqual(ptt._pttId, 'testuser', 'ptt id');
 });
 
@@ -470,6 +472,8 @@ runTest('should fallback to logical login when endpoint is 404', function () {
 
   ptt.login('fallbackUser', 'fallbackPw');
   assert(ptt._isLoggedIn, 'should be logically logged in on 404');
+  assertEqual(ptt.getLoginMode(), 'FALLBACK', 'login mode');
+  assert(!ptt.isRealSessionLogin(), 'should not be real session login');
   assertEqual(ptt._pttId, 'fallbackUser', 'ptt id');
 });
 
@@ -482,6 +486,7 @@ runTest('should logout correctly', function () {
   ptt.logout();
 
   assert(!ptt._isLoggedIn, 'not logged in');
+  assertEqual(ptt.getLoginMode(), 'NONE', 'login mode');
   assertEqual(ptt._pttId, '', 'empty ptt id');
   assertEqual(Object.keys(ptt._cookies).length, 0, 'no cookies');
 });

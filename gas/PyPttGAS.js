@@ -89,6 +89,7 @@ function PyPtt(options) {
 
   this._cookies = {};
   this._isLoggedIn = false;
+  this._loginMode = 'NONE';
   this._pttId = '';
   this._over18Confirmed = false;
 }
@@ -250,6 +251,7 @@ PyPtt.prototype.login = function (pttId, pttPw) {
   if (code === 302 || code === 200) {
     if (cookieStr.indexOf('over18') >= 0 || cookieStr.indexOf('PHPSESSID') >= 0) {
       this._isLoggedIn = true;
+      this._loginMode = 'REAL';
       this._pttId = pttId;
       this._log('INFO', 'Login successful');
       return;
@@ -262,6 +264,7 @@ PyPtt.prototype.login = function (pttId, pttPw) {
 
   if (code >= 200 && code < 400) {
     this._isLoggedIn = true;
+    this._loginMode = 'REAL';
     this._pttId = pttId;
     this._log('INFO', 'Login successful (code: ' + code + ', no session cookie detected)');
     return;
@@ -273,6 +276,7 @@ PyPtt.prototype.login = function (pttId, pttPw) {
   // Read-only features still work and over18 cookie is handled separately.
   if (code === 404) {
     this._isLoggedIn = true;
+    this._loginMode = 'FALLBACK';
     this._pttId = pttId;
     this._log('WARN', 'Login endpoint unavailable (404). Using logical login fallback for GAS read-only mode.');
     return;
@@ -287,6 +291,7 @@ PyPtt.prototype.login = function (pttId, pttPw) {
 PyPtt.prototype.logout = function () {
   this._cookies = {};
   this._isLoggedIn = false;
+  this._loginMode = 'NONE';
   this._pttId = '';
   this._over18Confirmed = false;
   this._log('INFO', 'Logged out');
@@ -298,6 +303,22 @@ PyPtt.prototype.logout = function () {
  */
 PyPtt.prototype.isLoggedIn = function () {
   return this._isLoggedIn;
+};
+
+/**
+ * Get login mode.
+ * @returns {string} 'NONE' | 'REAL' | 'FALLBACK'
+ */
+PyPtt.prototype.getLoginMode = function () {
+  return this._loginMode;
+};
+
+/**
+ * Whether current login state has a real web session.
+ * @returns {boolean}
+ */
+PyPtt.prototype.isRealSessionLogin = function () {
+  return this._isLoggedIn && this._loginMode === 'REAL';
 };
 
 /**

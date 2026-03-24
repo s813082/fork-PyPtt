@@ -26,6 +26,8 @@ function testLogin() {
 
   ptt.login(creds.account, creds.password);
   Logger.log('Login result: ' + ptt.isLoggedIn());
+  Logger.log('Login mode: ' + ptt.getLoginMode());
+  Logger.log('Real session login: ' + ptt.isRealSessionLogin());
   Logger.log('Logged in as: ' + ptt.getPttId());
 
   if (!ptt.isLoggedIn()) {
@@ -41,6 +43,32 @@ function testLogin() {
   }
 
   Logger.log('✅ testLogin PASSED');
+}
+
+/**
+ * Test fetching all comments by a fixed post URL and logging them.
+ * URL: https://www.ptt.cc/bbs/Stock/M.1774225803.A.CCD.html
+ */
+function testFetchAllCommentsFromFixedUrl() {
+  var ptt = new PyPtt({ logLevel: 'DEBUG' });
+  var postUrl = 'https://www.ptt.cc/bbs/Stock/M.1774225803.A.CCD.html';
+
+  var post = ptt.getPostByUrl(postUrl);
+  Logger.log('Post title: ' + post.title);
+  Logger.log('Post URL: ' + post.url);
+  Logger.log('Comments count: ' + post.comments.length);
+
+  for (var i = 0; i < post.comments.length; i++) {
+    var c = post.comments[i];
+    Logger.log(
+      '[' + i + '] ' +
+      c.type + ' ' +
+      c.author + ': ' +
+      c.content + ' (' + c.time + ')'
+    );
+  }
+
+  Logger.log('✅ testFetchAllCommentsFromFixedUrl PASSED');
 }
 
 // ============================================================

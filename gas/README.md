@@ -106,7 +106,12 @@ var ptt = new PyPtt(options);
 
 ```javascript
 ptt.login('myId', 'myPw');
+Logger.log(ptt.getLoginMode()); // 'REAL' 或 'FALLBACK'
+Logger.log(ptt.isRealSessionLogin()); // true 表示有真實 Web Session
 ```
+
+> 注意：若 PTT Web 的 `/login` 端點不可用（例如回傳 404），會進入 `FALLBACK` 模式。  
+> `FALLBACK` 僅適用讀取功能，不代表已建立可用於寫入操作的真實登入 Session。
 
 ### logout()
 
