@@ -237,13 +237,15 @@ PyPtt.prototype.login = function (pttId, pttPw) {
   var code = response.getResponseCode();
   var body = response.getContentText();
   var respHeaders = response.getHeaders ? response.getHeaders() : {};
-  this._log('DEBUG', 'Login response code: ' + code);
 
   var redirectLocation = respHeaders.Location || respHeaders.location || '';
-  if (redirectLocation) {
-    this._log('DEBUG', 'Login redirect location: ' + redirectLocation);
-  }
   var cookieStr = this._getCookieString();
+  this._log(
+    'DEBUG',
+    'Login response summary: code=' + code +
+      ', redirect=' + (redirectLocation || '(none)') +
+      ', hasSessionCookie=' + (cookieStr.indexOf('PHPSESSID') >= 0)
+  );
 
   if (code === 302 || code === 200) {
     if (cookieStr.indexOf('over18') >= 0 || cookieStr.indexOf('PHPSESSID') >= 0) {
@@ -266,7 +268,8 @@ PyPtt.prototype.login = function (pttId, pttPw) {
   }
 
   // PTT web currently does not expose a stable account login endpoint.
-  // In GAS mode we keep a logical login state so account-dependent flow can continue.
+  // In GAS mode we keep a logical login state so read-only account-dependent flow can continue.
+  // Note: write operations (post/comment/mail/edit) still require real BBS session capability.
   // Read-only features still work and over18 cookie is handled separately.
   if (code === 404) {
     this._isLoggedIn = true;
