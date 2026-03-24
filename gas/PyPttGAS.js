@@ -808,7 +808,9 @@ PyPtt.prototype._parseComments = function (html) {
 
 /**
  * Strip all HTML tags from a string.
- * Handles unclosed tags and tags spanning multiple lines.
+ * Uses a loop to handle nested or reconstructed tags (e.g., <<script>ipt>).
+ * Note: This is used for text extraction from trusted PTT server responses,
+ * not for sanitizing user input for HTML rendering.
  *
  * @param {string} str
  * @returns {string}
@@ -816,10 +818,15 @@ PyPtt.prototype._parseComments = function (html) {
  */
 PyPtt.prototype._stripHtmlTags = function (str) {
   if (!str) return '';
-  // First pass: remove complete tags (opening, closing, self-closing)
-  var result = str.replace(/<\/?[a-zA-Z][^>]*>/g, '');
-  // Second pass: remove any remaining unclosed tags (e.g., <script without >)
-  result = result.replace(/<\/?[a-zA-Z][^>]*/g, '');
+  var result = str;
+  var prev;
+  // Loop until no more HTML tags can be found (handles nested/reconstructed tags)
+  do {
+    prev = result;
+    result = result.replace(/<[^>]*>/g, '');
+  } while (result !== prev);
+  // Remove any remaining angle brackets that could form partial tags
+  result = result.replace(/</g, '&lt;').replace(/>/g, '&gt;');
   return result;
 };
 
