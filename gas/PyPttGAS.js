@@ -577,7 +577,7 @@ PyPtt.prototype._parsePostListEntry = function (html, board) {
   if (!titleMatch) {
     var deletedMatch = html.match(/<div class="title">\s*([\s\S]*?)\s*<\/div>/);
     if (deletedMatch) {
-      var titleText = deletedMatch[1].replace(/<[^>]*>/g, '').trim();
+      var titleText = this._stripHtmlTags(deletedMatch[1]).trim();
       if (titleText.indexOf('(本文已被刪除)') >= 0) {
         return {
           board: board,
@@ -595,7 +595,7 @@ PyPtt.prototype._parsePostListEntry = function (html, board) {
   }
 
   var aid = titleMatch[1];
-  var title = titleMatch[2].replace(/<[^>]*>/g, '').trim();
+  var title = this._stripHtmlTags(titleMatch[2]).trim();
 
   var authorMatch = html.match(/<div class="author">([^<]*)<\/div>/);
   var author = authorMatch ? authorMatch[1].trim() : '';
@@ -609,7 +609,7 @@ PyPtt.prototype._parsePostListEntry = function (html, board) {
     pushMatch = html.match(/<div class="nrec">([\s\S]*?)<\/div>/);
   }
   if (pushMatch) {
-    pushStr = pushMatch[1].replace(/<[^>]*>/g, '').trim();
+    pushStr = this._stripHtmlTags(pushMatch[1]).trim();
   }
 
   var pushNumber = 0;
@@ -702,7 +702,7 @@ PyPtt.prototype._parsePost = function (html, board, aid) {
 
     // Remove remaining HTML tags but keep line structure
     contentHtml = contentHtml.replace(/<br\s*\/?>/gi, '\n');
-    contentHtml = contentHtml.replace(/<[^>]*>/g, '');
+    contentHtml = this._stripHtmlTags(contentHtml);
 
     // Decode HTML entities
     contentHtml = this._decodeHtmlEntities(contentHtml);
@@ -807,6 +807,23 @@ PyPtt.prototype._parseComments = function (html) {
 };
 
 /**
+ * Strip all HTML tags from a string.
+ * Handles unclosed tags and tags spanning multiple lines.
+ *
+ * @param {string} str
+ * @returns {string}
+ * @private
+ */
+PyPtt.prototype._stripHtmlTags = function (str) {
+  if (!str) return '';
+  // First pass: remove complete tags (opening, closing, self-closing)
+  var result = str.replace(/<\/?[a-zA-Z][^>]*>/g, '');
+  // Second pass: remove any remaining unclosed tags (e.g., <script without >)
+  result = result.replace(/<\/?[a-zA-Z][^>]*/g, '');
+  return result;
+};
+
+/**
  * Decode common HTML entities.
  *
  * @param {string} str
@@ -815,16 +832,17 @@ PyPtt.prototype._parseComments = function (html) {
  */
 PyPtt.prototype._decodeHtmlEntities = function (str) {
   if (!str) return '';
+  // Decode &amp; last to prevent double-unescaping (e.g., &amp;lt; → &lt; → <)
   return str
-    .replace(/&amp;/g, '&')
+    .replace(/&#(\d+);/g, function (match, code) {
+      return String.fromCharCode(parseInt(code, 10));
+    })
     .replace(/&lt;/g, '<')
     .replace(/&gt;/g, '>')
     .replace(/&quot;/g, '"')
     .replace(/&#39;/g, "'")
     .replace(/&nbsp;/g, ' ')
-    .replace(/&#(\d+);/g, function (match, code) {
-      return String.fromCharCode(parseInt(code, 10));
-    });
+    .replace(/&amp;/g, '&');
 };
 
 // ============================================================
