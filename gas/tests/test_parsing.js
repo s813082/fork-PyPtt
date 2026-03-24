@@ -589,6 +589,150 @@ runTest('should get newest index with mock fetch', function () {
 });
 
 // ============================================================
+// Edge Case Tests
+// ============================================================
+
+console.log('\n--- Edge Case Tests ---');
+
+runTest('should handle post with no comments', function () {
+  var html = [
+    '<div id="main-content" class="bbs-screen bbs-content">',
+    '<div class="article-metaline"><span class="article-meta-tag">作者</span><span class="article-meta-value">nocomments</span></div>',
+    '<div class="article-metaline"><span class="article-meta-tag">標題</span><span class="article-meta-value">No comments post</span></div>',
+    '<div class="article-metaline"><span class="article-meta-tag">時間</span><span class="article-meta-value">Fri Jan  5 10:00:00 2024</span></div>',
+    '',
+    'Simple content here.',
+    '',
+    '--',
+    '※ 發信站: 批踢踢實業坊(ptt.cc), 來自: 10.0.0.1 (台灣)',
+    '</div>',
+  ].join('\n');
+
+  var ptt = new PyPtt();
+  var post = ptt._parsePost(html, 'Test', 'M.1.A.A');
+  assertEqual(post.comments.length, 0, 'no comments');
+  assertEqual(post.author, 'nocomments', 'author');
+  assertEqual(post.ip, '10.0.0.1', 'ip');
+  assertEqual(post.push_number, 0, 'push number');
+});
+
+runTest('should handle post with HTML entities in content', function () {
+  var html = [
+    '<div id="main-content" class="bbs-screen bbs-content">',
+    '<div class="article-metaline"><span class="article-meta-tag">作者</span><span class="article-meta-value">entityuser</span></div>',
+    '<div class="article-metaline"><span class="article-meta-tag">標題</span><span class="article-meta-value">[問卦] A &amp; B &lt; C</span></div>',
+    '<div class="article-metaline"><span class="article-meta-tag">時間</span><span class="article-meta-value">Mon Jan  1 12:00:00 2024</span></div>',
+    '',
+    'A &amp; B are &lt;friends&gt;',
+    '',
+    '--',
+    '※ 發信站: 批踢踢實業坊(ptt.cc), 來自: 5.5.5.5 (台灣)',
+    '</div>',
+  ].join('\n');
+
+  var ptt = new PyPtt();
+  var post = ptt._parsePost(html, 'Test', 'M.1.A.A');
+  assert(post.content.indexOf('A & B are <friends>') >= 0, 'decoded HTML entities');
+});
+
+runTest('should handle empty board (no posts)', function () {
+  var html = '<html><body>看板《Empty》目前沒有文章</body></html>';
+  var ptt = new PyPtt();
+  ptt._testFetch = function () {
+    return {
+      getResponseCode: function () { return 200; },
+      getContentText: function () { return html; },
+      getHeaders: function () { return {}; },
+    };
+  };
+  var result = ptt.getPostList('Empty');
+  assertEqual(result.posts.length, 0, 'no posts');
+  assertEqual(result.board, 'Empty', 'board name');
+});
+
+runTest('should handle board with no previous page', function () {
+  var html = '<html><body><div class="r-list-container"></div></body></html>';
+  var ptt = new PyPtt();
+  var result = ptt._parsePostList(html, 'Test', 20);
+  assertEqual(result.prevPage, null, 'no previous page');
+  assertEqual(result.posts.length, 0, 'no posts');
+});
+
+runTest('should handle search results', function () {
+  var ptt = new PyPtt();
+  var searchCalled = false;
+  ptt._testFetch = function (url, options) {
+    if (url.indexOf('/search') >= 0) {
+      searchCalled = true;
+      assert(url.indexOf('q=') >= 0, 'has query param');
+    }
+    return {
+      getResponseCode: function () { return 200; },
+      getContentText: function () { return SAMPLE_BOARD_HTML; },
+      getHeaders: function () { return {}; },
+    };
+  };
+
+  ptt.searchPosts('TestBoard', { keyword: '測試' });
+  assert(searchCalled, 'search endpoint called');
+});
+
+runTest('should throw on search without criteria', function () {
+  var ptt = new PyPtt();
+  var threw = false;
+  try {
+    ptt.searchPosts('TestBoard', {});
+  } catch (e) {
+    threw = true;
+    assertEqual(e.type, PttException.InvalidArgument, 'exception type');
+  }
+  assert(threw, 'should throw on empty search');
+});
+
+runTest('should handle getUser mock', function () {
+  var ptt = new PyPtt();
+  ptt._testFetch = function (url) {
+    return {
+      getResponseCode: function () { return 200; },
+      getContentText: function () { return '<div class="r-ent">some posts</div>'; },
+      getHeaders: function () { return {}; },
+    };
+  };
+
+  var user = ptt.getUser('testuser123');
+  assertEqual(user.ptt_id, 'testuser123', 'user id');
+  assertEqual(user.has_posts, true, 'has posts');
+});
+
+runTest('should handle cookie with equals sign in value', function () {
+  var ptt = new PyPtt();
+  ptt._parseCookies('token=abc=def=ghi; path=/');
+  assertEqual(ptt._cookies['token'], 'abc=def=ghi', 'cookie with equals');
+});
+
+runTest('should handle multiple push types in one post', function () {
+  var html = [
+    '<div id="main-content">',
+    '<div class="article-metaline"><span class="article-meta-tag">作者</span><span class="article-meta-value">multi</span></div>',
+    '<div class="article-metaline"><span class="article-meta-tag">標題</span><span class="article-meta-value">Multi push</span></div>',
+    '<div class="article-metaline"><span class="article-meta-tag">時間</span><span class="article-meta-value">Mon Jan  1 12:00:00 2024</span></div>',
+    'Content',
+    '--',
+    '※ 發信站: 批踢踢實業坊(ptt.cc), 來自: 1.1.1.1',
+    '<div class="push"><span class="push-tag">推 </span><span class="push-userid">a</span><span class="push-content">: good</span><span class="push-ipdatetime"> 01/01 12:00</span></div>',
+    '<div class="push"><span class="push-tag">推 </span><span class="push-userid">b</span><span class="push-content">: nice</span><span class="push-ipdatetime"> 01/01 12:01</span></div>',
+    '<div class="push"><span class="push-tag">推 </span><span class="push-userid">c</span><span class="push-content">: great</span><span class="push-ipdatetime"> 01/01 12:02</span></div>',
+    '<div class="push"><span class="push-tag">噓 </span><span class="push-userid">d</span><span class="push-content">: bad</span><span class="push-ipdatetime"> 01/01 12:03</span></div>',
+    '</div>',
+  ].join('\n');
+
+  var ptt = new PyPtt();
+  var post = ptt._parsePost(html, 'Test', 'M.1.A.A');
+  assertEqual(post.comments.length, 4, '4 comments');
+  assertEqual(post.push_number, 2, '3 push - 1 boo = 2');
+});
+
+// ============================================================
 // Summary
 // ============================================================
 
